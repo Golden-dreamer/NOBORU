@@ -68,7 +68,19 @@ function ParserManager.getMangaListAsync(mode, parser, i, Table, data, tag_data)
 	local T = {
 		Type = "MangaList",
 		F = function()
-			if mode == "Popular" then
+			if parser.prepareFilters and (not parser.FiltersCheckedAt or os.time()-parser.FiltersCheckedAt>1800) then
+				parser.FiltersCheckedAt=os.time()
+				local ok,err=pcall(parser.prepareFilters,parser)
+				if ok then
+					CatalogModes.reloadFilters(parser)
+				else
+					parser.FiltersCheckedAt=os.time()-1770
+					Console.error(err)
+				end
+			end
+			if mode == "Random" then
+				parser:getRandomManga(i,Table)
+			elseif mode == "Popular" then
 				if parser.getPopularManga then
 					parser:getPopularManga(i, Table)
 				else
@@ -110,6 +122,14 @@ function ParserManager.getMangaListAsync(mode, parser, i, Table, data, tag_data)
 	}
 	order[#order + 1] = T
 	uniques[Table] = T
+end
+
+function ParserManager.searchFilterOptions(filter,query,target)
+	local task={Type="FilterOptions",Table=target,F=function()
+		target.Options=filter.Search(query)
+	end}
+	order[#order+1]=task
+	uniques[target]=task
 end
 
 ---@param manga table

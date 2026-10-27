@@ -11,6 +11,10 @@ local modesFade = {}
 local Name = ""
 
 local currentFilters = {}
+local filterQueries = {}
+local filterSearchIndex
+local pendingFilterSearch
+local loadedParser
 local currentChecked = {}
 local currentLetters = {}
 local currentLettersIndex = 1
@@ -69,50 +73,116 @@ local function setFinalTags()
 	currentFinalTagsData = filter
 end
 
+local function fold(text)
+ local upper,lower={},{}
+ for c in it_utf8('АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ') do upper[#upper+1]=c end
+ for c in it_utf8('абвгдеёжзийклмнопрстуфхцчшщъыьэюя') do lower[#lower+1]=c end
+ local map={}
+ for i,c in ipairs(upper) do map[c]=lower[i] end
+ return (text:lower():gsub('[\194-\244][\128-\191]+',function(c) return map[c] or c end))
+end
+
 local function updateItemsDraw()
-	itemsToDraw = {}
-	for k = 1, #currentFilters do
-		local f = currentFilters[k]
-		itemsToDraw[#itemsToDraw + 1] = {
-			data = f,
-			type = "filter"
-		}
-		if f.visible then
-			for i = 1, #f.Tags do
-				itemsToDraw[#itemsToDraw + 1] = {
-					data = f.Tags[i],
-					type = "tag",
-					k = k,
-					i = i,
-					f = f
-				}
-			end
-		end
-	end
+ itemsToDraw={}
+ for k,f in ipairs(currentFilters) do
+  itemsToDraw[#itemsToDraw+1]={data=f,type='filter',k=k}
+  if f.visible then
+   itemsToDraw[#itemsToDraw+1]={type='search',k=k,f=f}
+   local query=fold(filterQueries[k] or '')
+   local count=0
+   for i,name in ipairs(f.Tags) do
+    if f.Search or query=='' or fold(name):find(query,1,true) then
+     count=count+1
+     if count>100 then break end
+     itemsToDraw[#itemsToDraw+1]={data=name,type='tag',k=k,i=i,f=f}
+    end
+   end
+   if count>100 or f.HasMore then itemsToDraw[#itemsToDraw+1]={type='more',k=k,f=f} end
+  end
+ end
+end
+
+local function beginFilterSearch(index,query)
+ local f=currentFilters[index]
+ if pendingFilterSearch then pendingFilterSearch.Filter.Loading=false end
+ filterQueries[index]=query
+ if f.Search then
+  local target={}
+  pendingFilterSearch={Filter=f,Index=index,Result=target}
+  f.Loading=true
+  ParserManager.searchFilterOptions(f,query,target)
+ end
+ updateItemsDraw()
+ for i,row in ipairs(itemsToDraw) do
+  if row.type=='search' and row.k==index then selectedIndex=#modes+i;slider.Y=math.max(0,(i-1)*50-80);break end
+ end
+end
+
+local function activateFilterRow(index)
+ local row=itemsToDraw[index]
+ if not row then return end
+ local f=currentFilters[row.k]
+ if row.type=='filter' then
+  f.visible=not f.visible
+  updateItemsDraw()
+  if f.visible and f.Search and not f.OptionsLoaded and not f.Loading then beginFilterSearch(row.k,filterQueries[row.k] or '') end
+ elseif row.type=='search' or row.type=='more' then
+  filterSearchIndex=row.k
+  Keyboard.show(f.Name,filterQueries[row.k] or '',128,TYPE_DEFAULT,MODE_TEXT,OPT_NO_AUTOCAP)
+ elseif row.type=='tag' then
+  local i=row.i
+  if f.Type=='radio' then currentChecked[row.k]=i
+  elseif f.Type=='check' then currentChecked[row.k][i]=not currentChecked[row.k][i]
+  elseif f.Type=='checkcross' then
+   local value=currentChecked[row.k][i]
+   if value=='cross' then currentChecked[row.k][i]=false
+   elseif value==true then currentChecked[row.k][i]='cross'
+   else currentChecked[row.k][i]=true end
+  end
+ end
+end
+
+local function applyFilterResults()
+ local pending=pendingFilterSearch
+ if not pending or not pending.Result.Done then return end
+ pendingFilterSearch=nil
+ local f=currentFilters[pending.Index]
+ if f~=pending.Filter then return end
+ f.Loading=false
+ local options=pending.Result.Options
+ if not options then return end
+ local names,values,checked,seen={},{},{},{}
+ local radio=f.Type=='radio'
+ local old=currentChecked[pending.Index] or {}
+ local selectedName=radio and f.Tags[old] or nil
+ local function add(name,value,state)
+  if seen[name] then return end
+  names[#names+1]=name;values[name]=value;checked[#names]=state or false;seen[name]=true
+ end
+ if f.EmptyOption then add(f.EmptyOption,(f.Values or {})[f.EmptyOption]) end
+ for i,name in ipairs(f.Tags) do
+  if (radio and name==selectedName) or (not radio and old[i]) then
+   add(name,(f.Values or {})[name],not radio and old[i])
+  end
+ end
+ local added=0
+ for _,option in ipairs(options) do
+  if not seen[option.Name] and added<100 then add(option.Name,option.Value);added=added+1 end
+ end
+ f.Tags,f.Values,f.HasMore,f.OptionsLoaded=names,values,#options>100,true
+ if radio then
+  currentChecked[pending.Index]=1
+  for i,name in ipairs(names) do if name==selectedName then currentChecked[pending.Index]=i end end
+ else currentChecked[pending.Index]=checked end
+ updateItemsDraw()
 end
 
 local function getFiltersHeight()
-	local h = 0
-	for i = 1, #currentFilters do
-		local f = currentFilters[i]
-		h = h + 50
-		if f.visible then
-			h = h + 50 * #f.Tags
-		end
-	end
-	return h
+	return #itemsToDraw*50
 end
 
 local function countFilterElements()
-	local c = 0
-	for i = 1, #currentFilters do
-		local f = currentFilters[i]
-		c = c + 1
-		if f.visible then
-			c = c + #f.Tags
-		end
-	end
-	return c
+	return #itemsToDraw
 end
 
 ---Updates scrolling movement
@@ -144,6 +214,11 @@ local function animationUpdate()
 end
 
 function CatalogModes.load(parser)
+	if pendingFilterSearch then pendingFilterSearch.Filter.Loading=false end
+	loadedParser=parser
+	filterQueries={}
+	filterSearchIndex=nil
+	pendingFilterSearch=nil
 	if parser and parser.ID and parser.ID ~= "IMPORTED" then
 		modes = {}
 		Name = parser.Name
@@ -152,6 +227,7 @@ function CatalogModes.load(parser)
 		if parser.getPopularManga then
 			modes[#modes + 1] = "Popular"
 		end
+		if parser.getRandomManga then modes[#modes+1]="Random" end
 		if parser.getLatestManga then
 			modes[#modes + 1] = "Latest"
 		end
@@ -230,6 +306,40 @@ function CatalogModes.load(parser)
 	end
 end
 
+function CatalogModes.reloadFilters(parser)
+	if loadedParser~=parser then return end
+	local oldMode,oldSearch=nowMode,searchData
+	local selected,selectedValues={},{}
+	for k,f in ipairs(currentFilters) do
+		local values={}
+		if f.Type=="radio" then values[f.Tags[currentChecked[k]] or ""]=true
+		else for i,name in ipairs(f.Tags) do if currentChecked[k][i] then values[name]=currentChecked[k][i] end end end
+		selected[f.Name]=values
+		selectedValues[f.Name]=f.Values or {}
+	end
+	CatalogModes.load(parser)
+	nowMode,searchData=oldMode,oldSearch
+	for k,f in ipairs(currentFilters) do
+		local values=selected[f.Name] or {}
+		if f.Search then
+			local seen={};for _,name in ipairs(f.Tags) do seen[name]=true end
+			for name in pairs(values) do
+				if not seen[name] then
+					f.Tags[#f.Tags+1]=name
+					f.Values[name]=(selectedValues[f.Name] or {})[name]
+					if f.Type~="radio" then currentChecked[k][#f.Tags]=false end
+				end
+			end
+		end
+		for i,name in ipairs(f.Tags) do
+			if values[name] then
+				if f.Type=="radio" then currentChecked[k]=i else currentChecked[k][i]=values[name] end
+			end
+		end
+	end
+	updateItemsDraw()
+end
+
 function CatalogModes.show()
 	status = "START"
 	oldFade = 1
@@ -238,7 +348,7 @@ function CatalogModes.show()
 end
 
 local function setMode(id)
-	if nowMode ~= id or modes[id] == "Search" or modes[id] == "ByLetter" or modes[id] == "ByTag" then
+	if nowMode ~= id or modes[id] == "Random" or modes[id] == "Search" or modes[id] == "ByLetter" or modes[id] == "ByTag" then
 		if modes[id] == "Search" then
 			Keyboard.show(Language[Settings.Language].APP.SEARCH, searchData, 128, TYPE_DEFAULT, MODE_TEXT, OPT_NO_AUTOCAP)
 			setFinalTags()
@@ -265,35 +375,7 @@ function CatalogModes.input(pad, oldpad, touch, oldtouch)
 					if oldtouch.y > 40 + 8 + 50 * #modes then
 						local id = math.floor((slider.Y + oldtouch.y - (40 + 8 + 50 * #modes)) / 50) + 1
 						if id > 0 then
-							for i = 1, #currentFilters do
-								local f = currentFilters[i]
-								id = id - 1
-								if id == 0 then
-									f.visible = not f.visible
-									updateItemsDraw()
-									break
-								end
-								if f.visible then
-									if id <= #f.Tags then
-										if f.Type == "check" then
-											currentChecked[i][id] = not currentChecked[i][id]
-										elseif f.Type == "radio" then
-											currentChecked[i] = id
-										elseif f.Type == "checkcross" then
-											if currentChecked[i][id] == "cross" then
-												currentChecked[i][id] = false
-											elseif currentChecked[i][id] == false then
-												currentChecked[i][id] = true
-											elseif currentChecked[i][id] == true then
-												currentChecked[i][id] = "cross"
-											end
-										end
-										break
-									else
-										id = id - #f.Tags
-									end
-								end
-							end
+							activateFilterRow(id)
 						end
 					else
 						local id = math.floor((oldtouch.y - 40) / 50) + 1
@@ -322,35 +404,7 @@ function CatalogModes.input(pad, oldpad, touch, oldtouch)
 				else
 					local id = selectedIndex - #modes
 					if id > 0 then
-						for i = 1, #currentFilters do
-							local f = currentFilters[i]
-							id = id - 1
-							if id == 0 then
-								f.visible = not f.visible
-								updateItemsDraw()
-								break
-							end
-							if f.visible then
-								if id <= #f.Tags then
-									if f.Type == "check" then
-										currentChecked[i][id] = not currentChecked[i][id]
-									elseif f.Type == "radio" then
-										currentChecked[i] = id
-									elseif f.Type == "checkcross" then
-										if currentChecked[i][id] == "cross" then
-											currentChecked[i][id] = false
-										elseif currentChecked[i][id] == false then
-											currentChecked[i][id] = true
-										elseif currentChecked[i][id] == true then
-											currentChecked[i][id] = "cross"
-										end
-									end
-									break
-								else
-									id = id - #f.Tags
-								end
-							end
-						end
+						activateFilterRow(id)
 					end
 				end
 			end
@@ -418,6 +472,7 @@ function CatalogModes.input(pad, oldpad, touch, oldtouch)
 end
 
 function CatalogModes.update()
+	applyFilterResults()
 	if status ~= "END" then
 		if selectedIndex > 0 then
 			slider.Y = slider.Y + ((selectedIndex - #modes) * 50 - 160 - slider.Y) / 8
@@ -439,7 +494,10 @@ function CatalogModes.update()
 		end
 		scrollUpdate()
 		if Keyboard.getState() ~= RUNNING then
-			if Keyboard.getState() == FINISHED then
+			if filterSearchIndex then
+				if Keyboard.getState()==FINISHED then beginFilterSearch(filterSearchIndex,Keyboard.getInput()) end
+				filterSearchIndex=nil
+			elseif Keyboard.getState() == FINISHED then
 				local data = Keyboard.getInput()
 				Console.write('Searching for "' .. data .. '"')
 				Catalogs.terminate()
@@ -478,6 +536,14 @@ function CatalogModes.draw()
 				else
 					Graphics.drawImage(960 - M * 350 + 14, y - 1, HideIcon.e)
 				end
+			elseif itemsToDraw[n].type == "search" or itemsToDraw[n].type == "more" then
+				local row=itemsToDraw[n]
+				local text=(row.f.Prefix and Language[Settings.Language].MODES.PrefixFilterSearch) or Language[Settings.Language].MODES.FilterSearch or "Find options"
+				if row.type=="more" then text=Language[Settings.Language].MODES.RefineFilterSearch or "Refine search (100+)"
+				elseif row.f.Loading then text=Language[Settings.Language].MODES.LoadingFilters or "Loading..."
+				elseif filterQueries[row.k] and filterQueries[row.k]~="" then text=text..": "..filterQueries[row.k] end
+				Graphics.drawImage(960-M*350+34,y-1,SearchIcon.e)
+				Font.print(FONT16,960-M*350+72,y,text,COLOR_ROYAL_BLUE)
 			elseif itemsToDraw[n].type == "tag" then
 				local f = itemsToDraw[n].f
 				local k = itemsToDraw[n].k
@@ -522,7 +588,9 @@ function CatalogModes.draw()
 		Graphics.fillRect(960 - M * 350, 960, 0, 40 + 8 + 50 * #modes, Color.new(0, 0, 0))
 		for i = 1, #modes do
 			local v = modes[i]
-			if v == "Popular" then
+			if v == "Random" then
+				Graphics.drawImage(960-M*350+14,17+40+(i-1)*50-1,RefreshIcon.e,COLOR_ROYAL_BLUE)
+			elseif v == "Popular" then
 				Graphics.drawImage(960 - M * 350 + 14, 17 + 40 + (i - 1) * 50 - 1, HotIcon.e, COLOR_GRADIENT(COLOR_GRAY, Color.new(255, 106, 0), modesFade[v]))
 			elseif v == "Latest" then
 				Graphics.drawImage(960 - M * 350 + 14, 17 + 40 + (i - 1) * 50 - 1, HistoryIcon.e, COLOR_GRADIENT(COLOR_GRAY, Color.new(0, 188, 18), modesFade[v]))

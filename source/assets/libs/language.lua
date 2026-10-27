@@ -3560,3 +3560,12 @@ end
 function GetLanguages()
 	return langs
 end
+
+for name,lang in pairs(Language) do
+	local russian=name=="Russian" or lang==Language.Russian
+	lang.MODES.FilterSearch=russian and "Найти в списке" or "Find in list"
+	lang.MODES.PrefixFilterSearch=russian and "Поиск по началу" or "Find by prefix"
+	lang.MODES.RefineFilterSearch=russian and "Уточни поиск (100+)" or "Refine search (100+)"
+	lang.MODES.LoadingFilters=russian and "Загрузка..." or "Loading..."
+	lang.MODES.Random=russian and "Случайная манга" or "Random manga"
+end
