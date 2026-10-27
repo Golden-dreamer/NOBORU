@@ -59,7 +59,7 @@ function Threads.update()
 		currentTask.Final = true
 		if currentTask.Type == "StringRequest" then
 			if currentTask.Link then
-				Network.requestStringAsync(currentTask.Link, USERAGENT, currentTask.HttpMethod, currentTask.PostData, currentTask.ContentType, currentTask.Cookie, currentTask.Header1, currentTask.Header2, currentTask.Header3, currentTask.Header4, currentTask.Proxy, currentTask.ProxyAuth)
+				Network.requestStringAsync(currentTask.Link, USERAGENT, currentTask.HttpMethod, currentTask.PostData, currentTask.ContentType, currentTask.Cookie, currentTask.Header1, currentTask.Header2, currentTask.Header3, currentTask.Header4, "", currentTask.Proxy, currentTask.ProxyAuth)
 			else
 				Console.error("No Link given or internet connection problem")
 				uniques[currentTask.UniqueKey] = nil
