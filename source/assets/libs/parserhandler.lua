@@ -352,7 +352,7 @@ function ParserManager.updateParserList(Table, Insert)
 				file,
 				{
 					Type = "StringRequest",
-					Link = "https://github.com/Creckeryop/NOBORU-parsers/tree/master/parsers",
+					Link = "https://github.com/Golden-dreamer/NOBORU-parsers/tree/master/parsers",
 					Table = file,
 					Index = "string"
 				}
@@ -361,7 +361,7 @@ function ParserManager.updateParserList(Table, Insert)
 				coroutine.yield(false)
 			end
 			for name, path in file.string:gmatch('{"name":"([^"]-%.lua)","path":"(parsers/[^"]-)","contentType":"file"}') do
-				local link2row = "https://raw.githubusercontent.com/Creckeryop/NOBORU-parsers/master/" .. path
+				local link2row = "https://raw.githubusercontent.com/Golden-dreamer/NOBORU-parsers/master/" .. path
 				local path2row = "ux0:data/noboru/parsers/" .. name
 				Threads.addTask(
 					link2row,

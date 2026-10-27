@@ -1,7 +1,7 @@
 Settings = {
 	Language = "Default",
 	Theme = "Light",
-	Version = 0.911,
+	Version = 0.912,
 	NSFW = false,
 	Orientation = "Horizontal",
 	ZoomReader = "Smart",
@@ -567,7 +567,7 @@ SettingsFunctions = {
 				"CheckLatestVersion",
 				{
 					Type = "StringRequest",
-					Link = "https://github.com/Creckeryop/NOBORU/releases/latest",
+					Link = "https://github.com/Golden-dreamer/NOBORU/releases/latest",
 					Table = file,
 					Index = "string",
 					OnComplete = function()
@@ -588,7 +588,7 @@ SettingsFunctions = {
 							"LoadAssetsData",
 							{
 								Type = "StringRequest",
-								Link = "https://github.com/Creckeryop/NOBORU/releases/expanded_assets/" .. tag,
+								Link = "https://github.com/Golden-dreamer/NOBORU/releases/expanded_assets/" .. tag,
 								Table = assetsFile,
 								Index = "string",
 								OnComplete = function ()
