@@ -12,6 +12,10 @@ local currentTask = nil
 local trash = {}
 local uniques = {}
 
+local filtersTimer = Timer.new()
+local filtersRefreshInterval = 30 * 60 * 1000
+local filtersRetryInterval = 30 * 1000
+
 local doesFileExist = System.doesFileExist
 
 ---Updates ParserManager functions
@@ -68,13 +72,13 @@ function ParserManager.getMangaListAsync(mode, parser, i, Table, data, tag_data)
 	local T = {
 		Type = "MangaList",
 		F = function()
-			if parser.prepareFilters and (not parser.FiltersCheckedAt or os.time()-parser.FiltersCheckedAt>1800) then
-				parser.FiltersCheckedAt=os.time()
+			if parser.prepareFilters and (not parser.FiltersRefreshAt or Timer.getTime(filtersTimer) >= parser.FiltersRefreshAt) then
 				local ok,err=pcall(parser.prepareFilters,parser)
 				if ok then
+					parser.FiltersRefreshAt = Timer.getTime(filtersTimer) + filtersRefreshInterval
 					CatalogModes.reloadFilters(parser)
 				else
-					parser.FiltersCheckedAt=os.time()-1770
+					parser.FiltersRefreshAt = Timer.getTime(filtersTimer) + filtersRetryInterval
 					Console.error(err)
 				end
 			end
