@@ -1,7 +1,7 @@
 Settings = {
 	Language = "Default",
 	Theme = "Light",
-	Version = 0.913,
+	Version = 0.914,
 	NSFW = false,
 	Orientation = "Horizontal",
 	ZoomReader = "Smart",
@@ -12,6 +12,7 @@ Settings = {
 	HideInOffline = true,
 	SkipFontLoad = false,
 	ParserLanguage = "DIF",
+	ParserLanguages = { ALL = true },
 	LibrarySorting = "Date added",
 	ChapterSorting = "1->N",
 	RefreshLibAtStart = false,
@@ -42,6 +43,58 @@ DeadZoneValues = { 20, 30, 40, 50, 90 }
 SensitivityValues = { 0.25, 0.50, 0.75, 1, 1.25, 1.5, 1.75 }
 
 local settings = Settings
+
+function settings.catalogLanguageSelected(code)
+	return settings.ParserLanguages[code] == true
+end
+
+function settings.catalogLanguageName(code)
+	if code == "ALL" then
+		return Language[settings.Language].SETTINGS.AllCatalogLanguages or Language.English.SETTINGS.AllCatalogLanguages
+	end
+	return Language[settings.Language].PARSERS[code] or code
+end
+
+function settings.catalogLanguageSummary()
+	if settings.ParserLanguages.ALL then
+		return settings.catalogLanguageName("ALL")
+	end
+	local names = {}
+	for _, code in ipairs(GetParserLanguages()) do
+		if settings.catalogLanguageSelected(code) then
+			names[#names + 1] = settings.catalogLanguageName(code)
+		end
+	end
+	if #names > 3 then
+		return table.concat(names, ", ", 1, 3) .. " +" .. (#names - 3)
+	end
+	return table.concat(names, ", ")
+end
+
+function settings.toggleCatalogLanguage(code)
+	local selected = table.clone(settings.ParserLanguages)
+	if code == "ALL" then
+		selected = { ALL = true }
+	else
+		selected.ALL = nil
+		selected[code] = not selected[code] or nil
+		if next(selected) == nil then selected.ALL = true end
+	end
+	settings.ParserLanguages = selected
+	local preferred, count = "DIF", 0
+	for language in pairs(selected) do
+		if language ~= "ALL" and language ~= "DIF" then
+			preferred, count = language, count + 1
+		end
+	end
+	settings.ParserLanguage = count == 1 and preferred or "DIF"
+	ChangeNSFW()
+end
+
+function settings.matchesCatalogLanguage(code)
+	local selected = settings.ParserLanguages
+	return selected.ALL or selected[code] or (code == "RAW" and (selected.CHN or selected.JAP)) or false
+end
 
 settings.LateVersion = settings.Version
 
@@ -162,7 +215,8 @@ local settingsListTree = {
 	Catalogs = {
 		"ShowNSFW",
 		"HideInOffline",
-		"PreferredCatalogLanguage"
+		"PreferredCatalogLanguage",
+		PreferredCatalogLanguage = {}
 	},
 	Reader = {
 		"ReaderOrientation",
@@ -284,6 +338,17 @@ function settings.load()
 				setSetting(new, "DoubleTapReader", { true, false })
 				setSetting(new, "Theme", Themes)
 				setSetting(new, "ParserLanguage", GetParserLanguages())
+				local selected = {}
+				if type(new.ParserLanguages) == "table" then
+					for _, code in ipairs(GetParserLanguages()) do
+						if new.ParserLanguages[code] == true then selected[code] = true end
+					end
+					if new.ParserLanguages.ALL == true then selected = { ALL = true } end
+				end
+				if next(selected) == nil then
+					selected = settings.ParserLanguage == "DIF" and { ALL = true } or { DIF = true, [settings.ParserLanguage] = true }
+				end
+				settings.ParserLanguages = selected
 				setSetting(new, "LibrarySorting", { "Date added", "A-Z", "Z-A" })
 				setSetting(new, "ChapterSorting", { "1->N", "N->1" })
 				setSetting(new, "RefreshLibAtStart", { true, false })
@@ -420,6 +485,12 @@ function settings.setTab(mode)
 					end
 				end
 				settingsListCurrentNode[mode] = t
+			elseif mode == "PreferredCatalogLanguage" then
+				local choices = { "CatalogLanguage:ALL" }
+				for _, code in ipairs(GetParserLanguages()) do
+					choices[#choices + 1] = "CatalogLanguage:" .. code
+				end
+				settingsListCurrentNode[mode] = choices
 			elseif mode == "DonatorsList" then
 				settingsListCurrentNode[mode] = { { name = "заглушка", info = "" } }
 			end
@@ -458,6 +529,13 @@ function settings.getTab()
 end
 
 ---Throws in main settings menu
+function settings.root()
+	settingsListCurrentNode = settingsListTree
+	settingsListCurrentPath = {}
+	settingsListCurrentPathNames = {}
+	settingsListCurrentNodeName = "MainSettingsMenu"
+end
+
 function settings.back()
 	if #settingsListCurrentPath > 0 then
 		settingsListCurrentNode = settingsListCurrentPath[#settingsListCurrentPath]
@@ -611,10 +689,7 @@ SettingsFunctions = {
 		SCE_CTRL_CROSS = settings.KeyType == "JP" and circle or cross
 		SCE_CTRL_CIRCLE = settings.KeyType == "JP" and cross or circle
 	end,
-	PreferredCatalogLanguage = function()
-		settings.ParserLanguage = table.next(settings.ParserLanguage, GetParserLanguages())
-		ChangeNSFW()
-	end,
+
 	LibrarySorting = function()
 		settings.LibrarySorting = table.next(settings.LibrarySorting, { "Date added", "A-Z", "Z-A" })
 	end,

@@ -68,7 +68,7 @@ function GetParserList()
 	is_parsers_list_updated = false
 	local list = {}
 	for _, v in pairs(parserTable) do
-		if (Settings.NSFW and v.NSFW or not v.NSFW) and not v.Disabled and (Settings.ParserLanguage == "DIF" or v.Lang == Settings.ParserLanguage or v.Lang == "DIF" or ((Settings.ParserLanguage == "CHN" or Settings.ParserLanguage == "JAP") and v.Lang == "RAW")) then
+		if (Settings.NSFW and v.NSFW or not v.NSFW) and not v.Disabled and Settings.matchesCatalogLanguage(v.Lang) then
 			list[#list + 1] = v
 		end
 	end

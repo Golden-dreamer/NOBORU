@@ -316,6 +316,11 @@ end
 
 local function selectSetting(index)
 	local item = Settings.list()[index]
+	if type(item) == "string" and item:match("^CatalogLanguage:") then
+		Settings.toggleCatalogLanguage(item:match(":(.+)$"))
+		Settings.save()
+		return
+	end
 	if item and Settings.isTab(item) then
 		if Settings.getTab() ~= "AdvancedChaptersDeletion" then
 			settingSelector:resetSelected()
@@ -876,7 +881,11 @@ function Catalogs.draw()
 					end
 				end
 			else
-				if task == "DonatorsList" then
+				if task:match("^CatalogLanguage:") then
+					local code = task:match(":(.+)$")
+					local mark = Settings.catalogLanguageSelected(code) and "[x] " or "[ ] "
+					Font.print(FONT20, 225, y - 70, mark .. Settings.catalogLanguageName(code), COLOR_FONT)
+				elseif task == "DonatorsList" then
 					Font.print(FONT20, 225, y - 70, Language[Settings.Language].SETTINGS[task] or task, Color.new(136, 0, 255))
 					if Language[Settings.Language].SETTINGS_DESCRIPTION[task] then
 						Font.print(FONT16, 225, y - 44, Language[Settings.Language].SETTINGS_DESCRIPTION[task], COLOR_ROYAL_BLUE)
@@ -914,7 +923,7 @@ function Catalogs.draw()
 				elseif task == "ReaderOrientation" then
 					Font.print(FONT16, 225, y - 44, Language[Settings.Language].READER[Settings.Orientation], COLOR_SUBFONT)
 				elseif task == "PreferredCatalogLanguage" then
-					Font.print(FONT16, 225, y - 44, Language[Settings.Language].PARSERS[Settings.ParserLanguage] or Settings.ParserLanguage or "error_type", COLOR_SUBFONT)
+					Font.print(FONT16, 225, y - 44, Settings.catalogLanguageSummary(), COLOR_SUBFONT)
 				elseif task == "ShowNSFW" then
 					Font.print(FONT16, 225, y - 44, Language[Settings.Language].NSFW[Settings.NSFW], Settings.NSFW and COLOR_CRIMSON or COLOR_ROYAL_BLUE)
 				elseif task == "HideInOffline" then

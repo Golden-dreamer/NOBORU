@@ -60,9 +60,12 @@ local PREV_MODES = {
 
 ---@param newMode string | '"LIBRARY"' | '"CATALOGS"' | '"SETTINGS"' | '"DOWNLOAD"'
 ---Sets menu mode
-function Menu.setMode(newMode)
-	if mode == newMode then
+function Menu.setMode(newMode, resetRoot)
+	if mode == newMode and not resetRoot then
 		return
+	end
+	if resetRoot and newMode == "SETTINGS" then
+		Settings.root()
 	end
 	Catalogs.setStatus(newMode)
 	mode = newMode
@@ -82,11 +85,11 @@ function Menu.input(oldPad, pad, oldTouch, touch)
 					if touch.y >= 85 and touch.y < 135 then
 						Menu.setMode("LIBRARY")
 					elseif touch.y < 185 then
-						Menu.setMode("CATALOGS")
+						Menu.setMode("CATALOGS", true)
 					elseif touch.y < 235 then
 						Menu.setMode("HISTORY")
 					elseif touch.y > 460 then
-						Menu.setMode("SETTINGS")
+						Menu.setMode("SETTINGS", true)
 					elseif touch.y > 410 then
 						Menu.setMode("DOWNLOAD")
 					elseif touch.y > 360 then
