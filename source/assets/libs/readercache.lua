@@ -1,4 +1,8 @@
 ReaderCache={}
+local removeDirectory=RemoveDirectory
+local doesFileExist=System.doesFileExist
+local deleteFile=System.deleteFile
+local createDirectory=System.createDirectory
 local session=0
 local root='ux0:data/noboru/temp/reader'
 local reserve=8*1024*1024
@@ -13,15 +17,15 @@ local function valid(page)
  return page and page.Link~='LoadNext' and page.Link~='LoadPrev'
 end
 local function remove(path)
- if path and System.doesFileExist(path) then System.deleteFile(path) end
+ if path and doesFileExist(path) then deleteFile(path) end
 end
 function ReaderCache.new(pages,parserID,release,loadLocal)
  session=session+1
- if session==1 then RemoveDirectory(root) end
- System.createDirectory(root)
+ if session==1 then removeDirectory(root) end
+ createDirectory(root)
  local self={Pages=pages,ParserID=parserID,Release=release,LoadLocal=loadLocal,Active=true,Serial=0,Current=1,Direction=1}
  self.Root=root..'/session-'..session
- System.createDirectory(self.Root)
+ createDirectory(self.Root)
  return setmetatable(self,{__index=ReaderCache})
 end
 function ReaderCache:close()
@@ -34,7 +38,7 @@ function ReaderCache:close()
    if page.Image then self.Release(i) end
   end
  end
- RemoveDirectory(self.Root)
+ removeDirectory(self.Root)
 end
 function ReaderCache:move(index,direction)
  self.Current=index
@@ -67,7 +71,7 @@ function ReaderCache:retry(index)
  if not page.Path and not page.Extract then page.Link=nil end
 end
 function ReaderCache:ready(page)
- return page.Path or page.Extract or (page.ReaderReady and System.doesFileExist(page.ReaderCachePath))
+ return page.Path or page.Extract or (page.ReaderReady and doesFileExist(page.ReaderCachePath))
 end
 function ReaderCache:ensure(index,priority)
  local page=self.Pages[index]

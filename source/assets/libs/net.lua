@@ -19,6 +19,7 @@ local closeFile = System.closeFile
 local deleteFile = System.deleteFile
 local openFile = System.openFile
 local sizeFile = System.sizeFile
+local readFile = System.readFile
 local doesFileExist = System.doesFileExist
 local removeDirectory = RemoveDirectory
 local getImageFormat = System.getImageFormat
@@ -314,8 +315,14 @@ function Threads.update()
 				if exists then
 					local handle=openFile(currentTask.Path,FREAD)
 					local size=sizeFile(handle)
+					local text
+					if currentTask.ReadText then text=readFile(handle,size) end
 					closeFile(handle)
 					bytes=bytes+size
+					if currentTask.ReadText then
+						currentTask.Table[currentTask.Index]=text or ""
+						deleteFile(currentTask.Path)
+					end
 					if currentTask.RequireContent then assert(size>0,"Downloaded file is empty") end
 					if currentTask.ValidateImage then
 						local width,height=System.getPictureResolution(currentTask.Path)
@@ -349,6 +356,7 @@ function Threads.update()
 				table.insert(orderList, currentTask)
 			else
 				uniques[currentTask.UniqueKey] = nil
+				if currentTask.ReadText and doesFileExist(currentTask.Path) then deleteFile(currentTask.Path) end
 				if currentTask.OnError then
 					local ok,callbackError=pcall(currentTask.OnError,err)
 					if not ok then Console.error(callbackError) end
@@ -446,6 +454,7 @@ local function taskete(uniqueKey, t, foo)
 		OnError = t.OnError,
 		ValidateImage = t.ValidateImage,
 		RequireContent = t.RequireContent,
+		ReadText = t.ReadText,
 		OnFinalComplete = t.OnFinalComplete,
 		Extract = t.Extract,
 		Path = t.Path and (t.Path:find("^...?0:") and t.Path or ("ux0:data/noboru/" .. t.Path)) or IMAGE_CACHE_PATH,
