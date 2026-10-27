@@ -12,6 +12,7 @@ local Name = ""
 
 local currentFilters = {}
 local filterQueries = {}
+local recentFilterTags = {}
 local filterSearchIndex
 local pendingFilterSearch
 local loadedParser
@@ -79,7 +80,7 @@ local function fold(text)
  for c in it_utf8('абвгдеёжзийклмнопрстуфхцчшщъыьэюя') do lower[#lower+1]=c end
  local map={}
  for i,c in ipairs(upper) do map[c]=lower[i] end
- return (text:lower():gsub('[\194-\244][\128-\191]+',function(c) return map[c] or c end))
+ return (text:gsub('[A-Z]',function(c) return string.char(c:byte()+32) end):gsub('[\194-\244][\128-\191]+',function(c) return map[c] or c end))
 end
 
 local function updateItemsDraw()
@@ -87,14 +88,29 @@ local function updateItemsDraw()
  for k,f in ipairs(currentFilters) do
   itemsToDraw[#itemsToDraw+1]={data=f,type='filter',k=k}
   if f.visible then
+   local seen={}
+   local function add(i)
+    if seen[i] then return end
+    seen[i]=true
+    itemsToDraw[#itemsToDraw+1]={data=f.Tags[i],type='tag',k=k,i=i,f=f}
+   end
+   local function active(i)
+    if f.Type=='radio' then return currentChecked[k]==i and f.Tags[i]~=f.EmptyOption end
+    return currentChecked[k][i]
+   end
+   -- Keep selections and recently disabled options visible for every query.
+   for i in ipairs(f.Tags) do if active(i) then add(i) end end
+   for _,name in ipairs(recentFilterTags[k] or {}) do
+    for i,tag in ipairs(f.Tags) do if tag==name then add(i);break end end
+   end
    itemsToDraw[#itemsToDraw+1]={type='search',k=k,f=f}
    local query=fold(filterQueries[k] or '')
    local count=0
    for i,name in ipairs(f.Tags) do
-    if f.Search or query=='' or fold(name):find(query,1,true) then
+    if not seen[i] and (query=='' or fold(name):find(query,1,true)==1) then
      count=count+1
      if count>100 then break end
-     itemsToDraw[#itemsToDraw+1]={data=name,type='tag',k=k,i=i,f=f}
+     add(i)
     end
    end
    if count>100 or f.HasMore then itemsToDraw[#itemsToDraw+1]={type='more',k=k,f=f} end
@@ -131,13 +147,33 @@ local function activateFilterRow(index)
   Keyboard.show(f.Name,filterQueries[row.k] or '',128,TYPE_DEFAULT,MODE_TEXT,OPT_NO_AUTOCAP)
  elseif row.type=='tag' then
   local i=row.i
-  if f.Type=='radio' then currentChecked[row.k]=i
+  local history=recentFilterTags[row.k] or {}
+  recentFilterTags[row.k]=history
+  local function remember(name)
+   if not name or name==f.EmptyOption then return end
+   for n=#history,1,-1 do if history[n]==name then table.remove(history,n) end end
+   table.insert(history,1,name)
+  end
+  if f.Type=='radio' then remember(f.Tags[currentChecked[row.k]]) end
+  remember(f.Tags[i])
+  if f.Type=='radio' then
+   if currentChecked[row.k]==i and f.EmptyOption then
+    for n,name in ipairs(f.Tags) do if name==f.EmptyOption then currentChecked[row.k]=n;break end end
+   else currentChecked[row.k]=i end
   elseif f.Type=='check' then currentChecked[row.k][i]=not currentChecked[row.k][i]
   elseif f.Type=='checkcross' then
    local value=currentChecked[row.k][i]
    if value=='cross' then currentChecked[row.k][i]=false
    elseif value==true then currentChecked[row.k][i]='cross'
    else currentChecked[row.k][i]=true end
+  end
+  updateItemsDraw()
+  for n,item in ipairs(itemsToDraw) do
+   if item.type=='tag' and item.k==row.k and item.i==i then
+    selectedIndex=#modes+n
+    slider.Y=math.max(0,(n-1)*50-80)
+    break
+   end
   end
  end
 end
@@ -161,7 +197,9 @@ local function applyFilterResults()
  end
  if f.EmptyOption then add(f.EmptyOption,(f.Values or {})[f.EmptyOption]) end
  for i,name in ipairs(f.Tags) do
-  if (radio and name==selectedName) or (not radio and old[i]) then
+  local recent=false
+  for _,tag in ipairs(recentFilterTags[pending.Index] or {}) do if tag==name then recent=true;break end end
+  if (radio and name==selectedName) or (not radio and old[i]) or recent then
    add(name,(f.Values or {})[name],not radio and old[i])
   end
  end
@@ -216,6 +254,7 @@ end
 function CatalogModes.load(parser)
 	if pendingFilterSearch then pendingFilterSearch.Filter.Loading=false end
 	loadedParser=parser
+	recentFilterTags={}
 	filterQueries={}
 	filterSearchIndex=nil
 	pendingFilterSearch=nil
@@ -309,6 +348,7 @@ end
 function CatalogModes.reloadFilters(parser)
 	if loadedParser~=parser then return end
 	local oldMode,oldSearch=nowMode,searchData
+	local oldRecent,oldQueries=recentFilterTags,filterQueries
 	local selected,selectedValues={},{}
 	for k,f in ipairs(currentFilters) do
 		local values={}
@@ -319,10 +359,18 @@ function CatalogModes.reloadFilters(parser)
 	end
 	CatalogModes.load(parser)
 	nowMode,searchData=oldMode,oldSearch
+	recentFilterTags,filterQueries=oldRecent,oldQueries
 	for k,f in ipairs(currentFilters) do
 		local values=selected[f.Name] or {}
 		if f.Search then
 			local seen={};for _,name in ipairs(f.Tags) do seen[name]=true end
+			for _,name in ipairs(recentFilterTags[k] or {}) do
+				if not seen[name] then
+					f.Tags[#f.Tags+1]=name;seen[name]=true
+					f.Values[name]=(selectedValues[f.Name] or {})[name]
+					if f.Type~="radio" then currentChecked[k][#f.Tags]=false end
+				end
+			end
 			for name in pairs(values) do
 				if not seen[name] then
 					f.Tags[#f.Tags+1]=name
@@ -538,7 +586,7 @@ function CatalogModes.draw()
 				end
 			elseif itemsToDraw[n].type == "search" or itemsToDraw[n].type == "more" then
 				local row=itemsToDraw[n]
-				local text=(row.f.Prefix and Language[Settings.Language].MODES.PrefixFilterSearch) or Language[Settings.Language].MODES.FilterSearch or "Find options"
+				local text=Language[Settings.Language].MODES.PrefixFilterSearch or Language[Settings.Language].MODES.FilterSearch or "Find options"
 				if row.type=="more" then text=Language[Settings.Language].MODES.RefineFilterSearch or "Refine search (100+)"
 				elseif row.f.Loading then text=Language[Settings.Language].MODES.LoadingFilters or "Loading..."
 				elseif filterQueries[row.k] and filterQueries[row.k]~="" then text=text..": "..filterQueries[row.k] end
