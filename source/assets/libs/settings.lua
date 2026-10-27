@@ -1,7 +1,7 @@
 Settings = {
 	Language = "Default",
 	Theme = "Light",
-	Version = 0.912,
+	Version = 0.913,
 	NSFW = false,
 	Orientation = "Horizontal",
 	ZoomReader = "Smart",
@@ -421,25 +421,7 @@ function settings.setTab(mode)
 				end
 				settingsListCurrentNode[mode] = t
 			elseif mode == "DonatorsList" then
-				local t = {}
-				t[#t + 1] = {
-					name = Language[Settings.Language].MESSAGE.THANK_YOU,
-					info = ""
-				}
-				if doesFileExist("ux0:data/noboru/donators") then
-					local fh = openFile("ux0:data/noboru/donators", FREAD)
-					local d_list = ToLines(readFile(fh, sizeFile(fh))) or {}
-					for i = 1, #d_list do
-						if d_list[i]:gsub("%s", "") ~= "" then
-							t[#t + 1] = {
-								name = d_list[i],
-								info = ""
-							}
-						end
-					end
-					closeFile(fh)
-				end
-				settingsListCurrentNode[mode] = t
+				settingsListCurrentNode[mode] = { { name = "заглушка", info = "" } }
 			end
 			settingsListCurrentPath[#settingsListCurrentPath + 1] = settingsListCurrentNode
 			settingsListCurrentNode = settingsListCurrentNode[mode]
@@ -617,22 +599,12 @@ SettingsFunctions = {
 		end
 	end,
 	CheckDonators = function()
-		if Threads.netActionUnSafe(Network.isWifiEnabled) then
-			Threads.insertTask(
-				"CheckDonators",
-				{
-					Type = "FileDownload",
-					Link = "https://creckeryop.github.io/DONATIONS.md",
-					Path = "ux0:data/noboru/donators"
-				}
-			)
-		end
 	end,
 	GetLastVpkSize = function()
 		return lastVpkSize
 	end,
 	ShowAuthor = function()
-		Notifications.push(Language[Settings.Language].NOTIFICATIONS.DEVELOPER_THING .. "\nhttps://github.com/Creckeryop/NOBORU")
+		Notifications.push("barbaring0\nBarbaring0@gmail.com")
 	end,
 	SwapXO = function()
 		settings.KeyType = table.next(settings.KeyType, { "JP", "EU" })

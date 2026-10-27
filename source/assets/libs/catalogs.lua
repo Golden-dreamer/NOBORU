@@ -1021,10 +1021,10 @@ function Catalogs.draw()
 						Font.print(FONT16, 225, y - 24, Language[Settings.Language].SETTINGS.PressAgainToAccept, COLOR_CRIMSON)
 					end
 				elseif task == "ShowAuthor" then
-					Font.print(FONT16, 225, y - 44, "@creckeryop", COLOR_SUBFONT)
-					Font.print(FONT16, 225, y - 24, "Email: didager@ya.ru", COLOR_ROYAL_BLUE)
+					Font.print(FONT16, 225, y - 44, "@barbaring0", COLOR_SUBFONT)
+					Font.print(FONT16, 225, y - 24, "Email: Barbaring0@gmail.com", COLOR_ROYAL_BLUE)
 				elseif task == "SupportDev" then
-					Font.print(FONT16, 225, y - 44, "https://paypal.me/creckeryop", COLOR_SUBFONT)
+					Font.print(FONT16, 225, y - 44, "никто сюда не зайдёт всё равно", COLOR_SUBFONT)
 				elseif task == "ShowVersion" then
 					Font.print(FONT16, 225, y - 44, Settings.Version, COLOR_SUBFONT)
 				elseif task == "ReaderDirection" then
