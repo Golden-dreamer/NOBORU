@@ -44,8 +44,17 @@ function ParserManager.update()
 				uniques[currentTask.Table] = nil
 				currentTask = nil
 			end
-			if not _ then
+			if not _ and currentTask then
+				local task=currentTask
+				local message=tostring(isSafeToleave):gsub("^.-:%d+:%s*", "")
 				Console.error(isSafeToleave)
+				if type(task.Table)=="table" then
+					task.Table.Error=message
+					task.Table.Done=true
+					if task.Type=="MangaList" then task.Table.NoPages=true end
+				end
+				uniques[task.Table]=nil
+				currentTask=nil
 			end
 		end
 	end
@@ -65,6 +74,8 @@ function ParserManager.getMangaListAsync(mode, parser, i, Table, data, tag_data)
 	if not parser or uniques[Table] then
 		return
 	end
+	Table.Error=nil
+	Table.Done=nil
 	Console.write("Task created")
 	if mode == "Search" then
 		data = data:gsub("%%", "%%%%25"):gsub("!", "%%%%21"):gsub("#", "%%%%23"):gsub("%$", "%%%%24"):gsub("&", "%%%%26"):gsub("'", "%%%%27"):gsub("%(", "%%%%28"):gsub("%)", "%%%%29"):gsub("%*", "%%%%2A"):gsub("%+", "%%%%2B"):gsub(",", "%%%%2C"):gsub("%.", "%%%%2E"):gsub("/", "%%%%2F"):gsub(" ", "%+")

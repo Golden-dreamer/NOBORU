@@ -1092,7 +1092,7 @@ function Catalogs.draw()
 				centerScreenMessage = Language[Settings.Language].MESSAGE.NO_LIBRARY_MANGA
 			elseif status == "MANGA" then
 				if not ParserManager.check(currentMangaList) and manga_load_status == 1 then
-					centerScreenMessage = Language[Settings.Language].MESSAGE.NO_CATALOG_MANGA
+					centerScreenMessage = currentMangaList.Error or Language[Settings.Language].MESSAGE.NO_CATALOG_MANGA
 				end
 			elseif status == "HISTORY" then
 				centerScreenMessage = Language[Settings.Language].MESSAGE.NO_HISTORY_MANGA
@@ -1101,6 +1101,18 @@ function Catalogs.draw()
 	end
 	if centerScreenMessage then
 		local lines = ToLines(centerScreenMessage)
+		if currentMangaList.Error and centerScreenMessage==currentMangaList.Error then
+			local wrapped={}
+			for _,line in ipairs(lines) do
+				local part=""
+				for char in it_utf8(line) do
+					if Font.getTextWidth(FONT16,part..char)>700 and part~="" then wrapped[#wrapped+1]=part;part="" end
+					part=part..char
+				end
+				wrapped[#wrapped+1]=part
+			end
+			lines=wrapped
+		end
 		local height = 0
 		for i, line in ipairs(lines) do
 			local newLine = {}

@@ -309,10 +309,18 @@ function Threads.update()
 				end
 				return
 			elseif currentTask.Type == "FileDownload" then
-				if doesFileExist(currentTask.Path) then
-					local handle = openFile(currentTask.Path, FREAD)
-					bytes = bytes + sizeFile(handle)
+				local exists=doesFileExist(currentTask.Path)
+				if currentTask.RequireContent or currentTask.ValidateImage then assert(exists,"Downloaded file missing") end
+				if exists then
+					local handle=openFile(currentTask.Path,FREAD)
+					local size=sizeFile(handle)
 					closeFile(handle)
+					bytes=bytes+size
+					if currentTask.RequireContent then assert(size>0,"Downloaded file is empty") end
+					if currentTask.ValidateImage then
+						local width,height=System.getPictureResolution(currentTask.Path)
+						assert(width and height and width>0 and height>0,"Downloaded file is not a supported image")
+					end
 				end
 			elseif currentTask.Type == "Skip" then
 				Console.error("WOW HOW THAT HAPPENED?")
@@ -341,6 +349,10 @@ function Threads.update()
 				table.insert(orderList, currentTask)
 			else
 				uniques[currentTask.UniqueKey] = nil
+				if currentTask.OnError then
+					local ok,callbackError=pcall(currentTask.OnError,err)
+					if not ok then Console.error(callbackError) end
+				end
 			end
 			currentTask = nil
 		end
@@ -431,6 +443,9 @@ local function taskete(uniqueKey, t, foo)
 		MaxWidth = t.MaxWidth,
 		Animated = t.Animated,
 		OnComplete = t.OnComplete,
+		OnError = t.OnError,
+		ValidateImage = t.ValidateImage,
+		RequireContent = t.RequireContent,
 		OnFinalComplete = t.OnFinalComplete,
 		Extract = t.Extract,
 		Path = t.Path and (t.Path:find("^...?0:") and t.Path or ("ux0:data/noboru/" .. t.Path)) or IMAGE_CACHE_PATH,

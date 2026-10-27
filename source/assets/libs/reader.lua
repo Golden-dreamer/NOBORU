@@ -1,4 +1,6 @@
 Reader = {}
+loadlib("readercache")
+local readerCache
 
 local CreatePoint = CreatePoint
 
@@ -181,6 +183,7 @@ local function deletePageImage(page)
 			end
 		end
 		allPages[page].Image = nil
+		allPages[page].Zoom = nil
 		Console.write("Removed " .. tostring(page))
 	else
 		ParserManager.remove(allPages[page])
@@ -190,6 +193,10 @@ end
 
 local function loadPageImage(page)
 	local PageTable = allPages[page]
+	if readerCache and PageTable and not PageTable.Path and not PageTable.Extract then
+		readerCache:load(page)
+		return
+	end
 	if not PageTable.Image and not (PageTable.Link == "LoadPrev" or PageTable.Link == "LoadNext") then
 		if PageTable.Extract then
 			Threads.insertTask(
@@ -250,31 +257,11 @@ local function changePage(page)
 	if allPages[allPages.Page].Link == "LoadNext" or allPages[allPages.Page].Link == "LoadPrev" then
 		return true
 	end
-	local o = {0}
-	for k = 1, #o do
-		local p = page + o[k]
-		if allPages[p] then
-			loadPageImage(p)
-		end
+	if readerCache then readerCache:move(page,(readDirection=="LEFT" and not is_down) and -1 or 1) end
+	for i=1,allPages.Count or #allPages do
+		if i~=page and i~=allPages.PrevPage then allPages[i].Zoom=nil end
 	end
-	for i = page - 2, page + 2, 4 do
-		if i > 0 and i <= #allPages then
-			deletePageImage(i)
-			local OldOne = allPages[i][1]
-			local OldLink = allPages[i].Link
-			local OldPath = allPages[i].Path
-			local OldExtr = allPages[i].Extract
-			for k, _ in pairs(allPages[i]) do
-				allPages[i][k] = nil
-			end
-			allPages[i][1] = OldOne
-			allPages[i].Link = OldLink
-			allPages[i].Path = OldPath
-			allPages[i].Extract = OldExtr
-			allPages[i].x = 0
-			allPages[i].y = 0
-		end
-	end
+	loadPageImage(page)
 	return true
 end
 
@@ -401,6 +388,7 @@ local function swipe(direction)
 end
 
 local function exit()
+	if readerCache then readerCache:close();readerCache=nil end
 	for i = 1, #allPages do
 		deletePageImage(i)
 	end
@@ -445,6 +433,7 @@ function Reader.input(oldPad, pad, oldTouch, touch, oldTouch2, touch2)
 				elseif touch.x > 960 - 88 - 88 then
 					if allPages[allPages.Page or -1] then
 						deletePageImage(allPages.Page)
+						if readerCache then readerCache:retry(allPages.Page) end
 						loadPageImage(allPages.Page)
 					end
 				end
@@ -794,6 +783,7 @@ function Reader.input(oldPad, pad, oldTouch, touch, oldTouch2, touch2)
 						elseif CursorIndex == 1 and currentState == STATE_READING then
 							if allPages[allPages.Page or -1] then
 								deletePageImage(allPages.Page)
+								if readerCache then readerCache:retry(allPages.Page) end
 								loadPageImage(allPages.Page)
 							end
 						elseif CursorIndex == 2 and currentState == STATE_READING then
@@ -909,6 +899,7 @@ function Reader.update()
 					}
 				end
 			end
+			readerCache=ReaderCache.new(allPages,chapter.Manga.ParserID,deletePageImage,loadPageImage)
 			if readDirection == "RIGHT" or is_down then
 				startPage = startPage and startPage > 0 and startPage <= allPages.Count and startPage or startPage == false and -1 or nil
 				if startPage == -1 then
@@ -977,64 +968,7 @@ function Reader.update()
 			return
 		end
 		gesture_touch_update()
-		if allPages.PrevPage and allPages.PrevPage ~= allPages.Page and (((is_down and currentPageOffset.y or currentPageOffset.x) >= 0 and allPages.PrevPage > allPages.Page or (is_down and currentPageOffset.y or currentPageOffset.x) <= 0 and allPages.PrevPage < allPages.Page) and orientation == "Horizontal" or ((is_down and -currentPageOffset.x or currentPageOffset.y) >= 0 and allPages.PrevPage > allPages.Page or (is_down and -currentPageOffset.x or currentPageOffset.y) <= 0 and allPages.PrevPage < allPages.Page) and orientation == "Vertical") then
-			if allPages.PrevPage > 0 and allPages.PrevPage <= #allPages then
-				deletePageImage(allPages.PrevPage)
-			end
-			local p = allPages.Page + math.sign(allPages.Page - allPages.PrevPage)
-			if p > 0 and p <= #allPages then
-				if not allPages[p].Image and not (allPages[p].Link == "LoadPrev" or allPages[p].Link == "LoadNext") then
-					if allPages[p].Extract then
-						local new_page = allPages[p]
-						Threads.addTask(
-							new_page,
-							{
-								Type = "UnZipFile",
-								Path = new_page.Path,
-								Extract = new_page.Extract,
-								DestPath = "ux0:data/noboru/temp/cache.image",
-								OnComplete = function()
-									Threads.insertTask(
-										new_page,
-										{
-											Type = "Image",
-											Table = new_page,
-											Path = "temp/cache.image",
-											Index = "Image",
-											Animated = Settings.AnimatedGif
-										}
-									)
-								end
-							}
-						)
-					elseif allPages[p].Path then
-						Threads.addTask(
-							allPages[p],
-							{
-								Type = "Image",
-								Path = allPages[p].Path,
-								Table = allPages[p],
-								Index = "Image",
-								Animated = Settings.AnimatedGif
-							}
-						)
-					elseif allPages[p].Link then
-						Threads.addTask(
-							allPages[p],
-							{
-								Type = "ImageDownload",
-								Link = allPages[p].Link,
-								Table = allPages[p],
-								Index = "Image",
-								Animated = Settings.AnimatedGif
-							}
-						)
-					else
-						ParserManager.loadPageImage(Chapters[currentChapterNumber].Manga.ParserID, allPages[p][1], allPages[p], p, false)
-					end
-				end
-			end
-		end
+		if readerCache then readerCache:update() end
 		local o = readDirection == "LEFT" and {1, -1, 0} or {-1, 1, 0}
 		for k = 1, #o do
 			local i = o[k]
@@ -1473,8 +1407,9 @@ function Reader.draw()
 					end
 				end
 			elseif page then
-				local precentage = Threads.getProgress(page)
+				local precentage = Threads.getProgress(page.ReaderDownloadKey or page)
 				local loading = Language[Settings.Language].READER.LOADING_PAGE .. string.sub("...", 1, math.ceil(Timer.getTime(GlobalTimer) / 250) % 4)
+				if page.ReaderError then loading=page.ReaderError:sub(1,90) end
 				local Width = Font.getTextWidth(FONT16, loading)
 				if orientation == "Horizontal" then
 					Font.print(FONT16, currentPageOffset.x + 960 * (is_down and 0 or i) + 480 - Width / 2, 272 + currentPageOffset.y + 544 * (is_down and i or 0) - 10, loading, COLOR_FONT)
@@ -1596,6 +1531,7 @@ function Reader.draw()
 end
 
 function Reader.loadChapter(chapter)
+	if readerCache then readerCache:close();readerCache=nil end
 	currentState = STATE_LOADING
 	if not Chapters[chapter] then
 		Console.error("Error loading chapter")
@@ -1652,6 +1588,7 @@ function Reader.updateSettings()
 			allPages.PrevPage = allPages.Count - allPages.PrevPage + 1
 		end
 	end
+	if readerCache then readerCache:move(allPages.Page,(readDirection=="LEFT" and not is_down) and -1 or 1) end
 	updateMeasurements()
 end
 

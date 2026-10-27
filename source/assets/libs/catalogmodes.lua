@@ -13,6 +13,7 @@ local Name = ""
 local currentFilters = {}
 local filterQueries = {}
 local recentFilterTags = {}
+local preserveFilterViewport=false
 local filterSearchIndex
 local pendingFilterSearch
 local loadedParser
@@ -89,25 +90,25 @@ local function updateItemsDraw()
   itemsToDraw[#itemsToDraw+1]={data=f,type='filter',k=k}
   if f.visible then
    local seen={}
-   local function add(i)
-    if seen[i] then return end
-    seen[i]=true
-    itemsToDraw[#itemsToDraw+1]={data=f.Tags[i],type='tag',k=k,i=i,f=f}
+   local function add(i,pinned)
+    if pinned and seen[i] then return end
+    if pinned then seen[i]=true end
+    itemsToDraw[#itemsToDraw+1]={data=f.Tags[i],type='tag',k=k,i=i,f=f,pinned=pinned==true}
    end
    local function active(i)
     if f.Type=='radio' then return currentChecked[k]==i and f.Tags[i]~=f.EmptyOption end
     return currentChecked[k][i]
    end
    -- Keep selections and recently disabled options visible for every query.
-   for i in ipairs(f.Tags) do if active(i) then add(i) end end
+   for i in ipairs(f.Tags) do if active(i) then add(i,true) end end
    for _,name in ipairs(recentFilterTags[k] or {}) do
-    for i,tag in ipairs(f.Tags) do if tag==name then add(i);break end end
+    for i,tag in ipairs(f.Tags) do if tag==name then add(i,true);break end end
    end
    itemsToDraw[#itemsToDraw+1]={type='search',k=k,f=f}
    local query=fold(filterQueries[k] or '')
    local count=0
    for i,name in ipairs(f.Tags) do
-    if not seen[i] and (query=='' or fold(name):find(query,1,true)==1) then
+    if query=='' or fold(name):find(query,1,true)==1 then
      count=count+1
      if count>100 then break end
      add(i)
@@ -121,6 +122,8 @@ end
 local function beginFilterSearch(index,query)
  local f=currentFilters[index]
  if pendingFilterSearch then pendingFilterSearch.Filter.Loading=false end
+ recentFilterTags[index]={}
+ preserveFilterViewport=false
  filterQueries[index]=query
  if f.Search then
   local target={}
@@ -146,6 +149,7 @@ local function activateFilterRow(index)
   filterSearchIndex=row.k
   Keyboard.show(f.Name,filterQueries[row.k] or '',128,TYPE_DEFAULT,MODE_TEXT,OPT_NO_AUTOCAP)
  elseif row.type=='tag' then
+  local oldY=slider.Y
   local i=row.i
   local history=recentFilterTags[row.k] or {}
   recentFilterTags[row.k]=history
@@ -169,9 +173,10 @@ local function activateFilterRow(index)
   end
   updateItemsDraw()
   for n,item in ipairs(itemsToDraw) do
-   if item.type=='tag' and item.k==row.k and item.i==i then
+   if item.type=='tag' and item.k==row.k and item.i==i and item.pinned==row.pinned then
     selectedIndex=#modes+n
-    slider.Y=math.max(0,(n-1)*50-80)
+    slider.Y=math.max(0,oldY+(n-index)*50)
+    preserveFilterViewport=true
     break
    end
   end
@@ -252,6 +257,7 @@ local function animationUpdate()
 end
 
 function CatalogModes.load(parser)
+	preserveFilterViewport=false
 	if pendingFilterSearch then pendingFilterSearch.Filter.Loading=false end
 	loadedParser=parser
 	recentFilterTags={}
@@ -462,6 +468,7 @@ function CatalogModes.input(pad, oldpad, touch, oldtouch)
 			controlInterval = 400
 		elseif Timer.getTime(controlTimer) > controlInterval or (Controls.check(pad, SCE_CTRL_DOWN) and not Controls.check(oldpad, SCE_CTRL_DOWN) or Controls.check(pad, SCE_CTRL_UP) and not Controls.check(oldpad, SCE_CTRL_UP) or ((modes[selectedIndex] == "ByLetter" or modes[selectedIndex] == "ByTag") and (Controls.check(pad, SCE_CTRL_LEFT) and not Controls.check(oldpad, SCE_CTRL_LEFT) or Controls.check(pad, SCE_CTRL_RIGHT) and not Controls.check(oldpad, SCE_CTRL_RIGHT)))) then
 			if Controls.check(pad, SCE_CTRL_DOWN + SCE_CTRL_UP + SCE_CTRL_LEFT + SCE_CTRL_RIGHT) then
+				preserveFilterViewport=false
 				if Controls.check(pad, SCE_CTRL_UP) then
 					if selectedIndex == 0 then
 						selectedIndex = 1
@@ -522,7 +529,7 @@ end
 function CatalogModes.update()
 	applyFilterResults()
 	if status ~= "END" then
-		if selectedIndex > 0 then
+		if selectedIndex > 0 and not preserveFilterViewport then
 			slider.Y = slider.Y + ((selectedIndex - #modes) * 50 - 160 - slider.Y) / 8
 		end
 		animationUpdate()
@@ -547,6 +554,8 @@ function CatalogModes.update()
 				filterSearchIndex=nil
 			elseif Keyboard.getState() == FINISHED then
 				local data = Keyboard.getInput()
+				recentFilterTags={}
+				updateItemsDraw()
 				Console.write('Searching for "' .. data .. '"')
 				Catalogs.terminate()
 				for i = 1, #modes do
