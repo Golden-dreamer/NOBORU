@@ -71,13 +71,17 @@ function ReaderCache:retry(index)
  if not page.Path and not page.Extract then page.Link=nil end
 end
 function ReaderCache:ready(page)
- return page.Path or page.Extract or (page.ReaderReady and doesFileExist(page.ReaderCachePath))
+ -- This session owns its files; prune/retry invalidate ReaderReady explicitly.
+ return page.Path or page.Extract or (page.ReaderReady and page.ReaderCachePath)
 end
 function ReaderCache:ensure(index,priority)
  local page=self.Pages[index]
  if not valid(page) or page.ReaderError then return false end
  if self:ready(page) then return true end
- if page.ReaderDownloadKey and Threads.check(page.ReaderDownloadKey) then return false end
+ if page.ReaderDownloadKey and Threads.check(page.ReaderDownloadKey) then
+  if priority then Threads.promote(page.ReaderDownloadKey) end
+  return false
+ end
  if ParserManager.check(page) then return false end
  if page.Error then page.ReaderError=page.Error;return false end
  if not page.Link then
@@ -108,7 +112,11 @@ function ReaderCache:ensure(index,priority)
 end
 function ReaderCache:decode(index,priority)
  local page=self.Pages[index]
- if page.Image or page.ReaderDecodePending or page.ReaderError or Threads.check(page) then return end
+ if page.ReaderDecodePending or Threads.check(page) then
+  if priority then Threads.promote(page) end
+  return
+ end
+ if page.Image or page.ReaderError then return end
  if priority then
   local width,height=page.ReaderWidth,page.ReaderHeight
   if width and height then
@@ -149,8 +157,11 @@ function ReaderCache:update()
  end
  if not self:ensure(self.Current,true) then return end
  if not current.Image and not current.ReaderError then self:decode(self.Current,true);return end
- if Threads.isDownloadRunning() then return end
+ if self.PlanPage~=self.Current or self.PlanCount~=count or self.PlanDirection~=self.Direction then
+  self.Plans={};self.PlanPage=self.Current;self.PlanCount=count;self.PlanDirection=self.Direction
+ end
  local function candidates(size)
+  if self.Plans[size] then return self.Plans[size] end
   local first,last=bounds(self.Current,count,size,self.Direction)
   local list={self.Current}
   for distance=1,size do
@@ -158,16 +169,24 @@ function ReaderCache:update()
     if i>=first and i<=last and valid(self.Pages[i]) then list[#list+1]=i end
    end
   end
+  self.Plans[size]=list
   return list
  end
- for _,i in ipairs(candidates(6)) do
+ -- Decode already downloaded neighbours before waiting on a missing file.
+ -- At most one background task is queued; the native async slot remains serial.
+ if Threads.isDownloadRunning() then return end
+ local nearby=candidates(6)
+ for _,i in ipairs(nearby) do
   local page=self.Pages[i]
-  if not page.Image and not page.ReaderError then
-   if not self:ensure(i,false) then return end
+  if not page.Image and not page.ReaderError and self:ready(page) then
    local width,height=page.ReaderWidth,page.ReaderHeight
    if not width and page.Path and not page.Extract then width,height=System.getPictureResolution(page.Path) end
    if not width or not height or width*height*4+reserve<Graphics.getFreeMemory() then self:decode(i,false);return end
   end
+ end
+ for _,i in ipairs(nearby) do
+  local page=self.Pages[i]
+  if not self:ready(page) and not page.ReaderError then self:ensure(i,false);return end
  end
  for _,i in ipairs(candidates(30)) do
   local page=self.Pages[i]

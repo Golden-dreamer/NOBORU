@@ -29,12 +29,21 @@ local function img2bytes(width, height, dScale)
 end
 
 local is_net_inited = false
+local idleTimer = Timer.new()
+local taskTimer = Timer.new()
+local idle = false
+local networkIdleMs = 15000
 
 ---Updates threads tasks
 function Threads.update()
 	if is_net_inited and not currentTask and #orderList == 0 then
-		Network.term()
-		is_net_inited = false
+		if not idle then Timer.reset(idleTimer); idle = true end
+		if Timer.getTime(idleTimer) >= networkIdleMs then
+			Network.term()
+			is_net_inited = false
+		end
+	else
+		idle = false
 	end
 	if not is_net_inited and (#orderList ~= 0 or currentTask) then
 		Network.init()
@@ -57,6 +66,7 @@ function Threads.update()
 			return
 		end
 		currentTask = table.remove(orderList, 1)
+		Timer.reset(taskTimer)
 		currentTask.Final = true
 		if currentTask.Type == "StringRequest" then
 			if currentTask.Link then
@@ -339,6 +349,7 @@ function Threads.update()
 		local success, err = pcall(saveFunction)
 		if success then
 			if currentTask == nil then
+				Console.write(string.format("PERF: %s %d ms", tempTask.Type, Timer.getTime(taskTimer)))
 				if tempTask.OnComplete then
 					tempTask.OnComplete()
 					Console.write("OnComplete executing for " .. tempTask.Type .. " " .. (tempTask.Link or tempTask.Path or tempTask.UniqueKey))
@@ -538,6 +549,20 @@ function Threads.getProgress(uniqueKey)
 		end
 	end
 	return 0
+end
+
+---Move a queued task ahead without cancelling an active native operation.
+function Threads.promote(uniqueKey)
+	local task = uniques[uniqueKey]
+	if not task or task == currentTask or task.Type == "Skip" then return false end
+	for i = 1, #orderList do
+		if orderList[i] == task then
+			table.remove(orderList, i)
+			table.insert(orderList, 1, task)
+			return true
+		end
+	end
+	return false
 end
 
 ---@param uniqueKey string
