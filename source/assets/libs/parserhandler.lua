@@ -60,6 +60,49 @@ function ParserManager.update()
 	end
 end
 
+local function randomMangaList(parser,page,dest)
+ local batch={}
+ parser:getRandomManga(page,batch)
+ if #batch~=1 or page~=1 then
+  for _,manga in ipairs(batch) do dest[#dest+1]=manga end
+  dest.NoPages=batch.NoPages
+  return
+ end
+ dest.NoPages=true
+ local seen={}
+ local function append(manga)
+  local link=manga.Link
+  if type(link)=="table" then link=link.Link end
+  local key=link or manga.BrowserLink or manga.Name
+  if not key or seen[key] then return false end
+  seen[key]=true
+  dest[#dest+1]=manga
+  return true
+ end
+ for _,manga in ipairs(dest) do
+  local link=manga.Link
+  if type(link)=="table" then link=link.Link end
+  local key=link or manga.BrowserLink or manga.Name
+  if key then seen[key]=true end
+ end
+ append(batch[1])
+ local target=math.max(1,math.min(24,tonumber(parser.RandomBatchSize) or 24))
+ local stale=0
+ for attempt=2,36 do
+  if #dest>=target or stale>=5 then break end
+  coroutine.yield(true)
+  batch={}
+  parser:getRandomManga(1,batch)
+  local added=0
+  for _,manga in ipairs(batch) do
+   if #dest>=target then break end
+   if append(manga) then added=added+1 end
+  end
+  if #batch==0 then break end
+  stale=added==0 and stale+1 or 0
+ end
+end
+
 ---@param mode string | "Popular" | "Latest" | "Search"
 ---@param parser Parser
 ---@param i number
@@ -94,7 +137,7 @@ function ParserManager.getMangaListAsync(mode, parser, i, Table, data, tag_data)
 				end
 			end
 			if mode == "Random" then
-				parser:getRandomManga(i,Table)
+				randomMangaList(parser,i,Table)
 			elseif mode == "Popular" then
 				if parser.getPopularManga then
 					parser:getPopularManga(i, Table)
