@@ -53,7 +53,7 @@ System.checkApp = nil
 
 local df = dofile
 function loadlib(str)
-	df("app0:assets/libs/" .. str .. ".lua")
+	return df("app0:assets/libs/" .. str .. ".lua")
 end
 
 local suc, err = xpcall(dofile, debug.traceback, "app0:main.lua")

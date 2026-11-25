@@ -1038,13 +1038,18 @@ function Catalogs.draw()
 				elseif task == "SupportDev" then
 					Font.print(FONT16, 225, y - 44, "никто сюда не зайдёт всё равно", COLOR_SUBFONT)
 				elseif task == "ShowVersion" then
-					Font.print(FONT16, 225, y - 44, Settings.Version, COLOR_SUBFONT)
+					Font.print(FONT16, 225, y - 44, Settings.installedBuild(), COLOR_SUBFONT)
+				elseif task == "UpdateChannel" then
+					Font.print(FONT16, 225, y - 44, Settings.UpdateChannel, COLOR_ROYAL_BLUE)
 				elseif task == "ReaderDirection" then
 					Font.print(FONT16, 225, y - 44, Language[Settings.Language].READER[Settings.ReaderDirection], COLOR_SUBFONT)
 				elseif task == "SwapXO" then
 					Font.print(FONT16, 225, y - 44, Language[Settings.Language].SETTINGS[Settings.KeyType], COLOR_SUBFONT)
 				elseif task == "CheckUpdate" then
-					Font.print(FONT16, 225, y - 44, Language[Settings.Language].SETTINGS.LatestVersion .. Settings.LateVersion, tonumber(Settings.LateVersion) > tonumber(Settings.Version) and COLOR_ROYAL_BLUE or COLOR_SUBFONT)
+					local tag, available = Settings.updateStatus()
+					if tag then
+						Font.print(FONT16, 225, y - 44, Language[Settings.Language].SETTINGS.LatestVersion .. tag, available and COLOR_ROYAL_BLUE or COLOR_SUBFONT)
+					end
 				elseif task == "SaveDataPath" then
 					Font.print(FONT16, 225, y - 44, Settings.SaveDataPath, COLOR_SUBFONT)
 				elseif task == "AnimatedGif" then

@@ -1,7 +1,11 @@
+local installedDevTag = nil
+local firstChannelVersion = 0.928
+
 Settings = {
 	Language = "Default",
 	Theme = "Light",
-	Version = 0.927,
+	Version = 0.928,
+	UpdateChannel = "Stable",
 	NSFW = false,
 	Orientation = "Horizontal",
 	ZoomReader = "Smart",
@@ -103,7 +107,9 @@ function settings.matchesCatalogLanguage(code)
 	return selected.ALL or selected[code] or (code == "RAW" and (selected.CHN or selected.JAP)) or false
 end
 
-settings.LateVersion = settings.Version
+function settings.installedBuild()
+	return installedDevTag or tostring(settings.Version)
+end
 
 local cross = SCE_CTRL_CROSS
 local circle = SCE_CTRL_CIRCLE
@@ -260,6 +266,7 @@ local settingsListTree = {
 	},
 	About = {
 		"ShowVersion",
+		"UpdateChannel",
 		"CheckUpdate",
 		"ShowAuthor",
 		"SupportDev",
@@ -367,6 +374,7 @@ function settings.load()
 				setSetting(new, "RightStickSensitivity", SensitivityValues)
 				setSetting(new, "SilentDownloads", { true, false })
 				setSetting(new, "UseProxy", { true, false })
+				setSetting(new, "UpdateChannel", { "Stable", "Dev" })
 				setSetting(new, "ProxyIP", {})
 				setSetting(new, "ProxyPort", {})
 				setSetting(new, "UseProxyAuth", { true, false })
@@ -553,9 +561,54 @@ function settings.back()
 	end
 end
 
-local lastVpkLink
-local lastVpkSize = "NaN"
-local changesText
+local offeredRelease, latestTag
+local updateCheck = 0
+
+function settings.updateStatus()
+	return latestTag, offeredRelease ~= nil
+end
+
+local function clearUpdateOffer()
+	updateCheck = updateCheck + 1
+	offeredRelease, latestTag = nil, nil
+end
+
+local function checkUpdate(quiet)
+	if is_app_updating then return end
+	clearUpdateOffer()
+	local check, channel = updateCheck, settings.UpdateChannel
+	local function isCurrent()
+		return check == updateCheck and channel == settings.UpdateChannel
+	end
+	if not Threads.netActionUnSafe(Network.isWifiEnabled) then
+		if not quiet then Notifications.push(Language[settings.Language].SETTINGS.NoConnection) end
+		return
+	end
+	AppReleases.check(channel, installedDevTag, isCurrent, function(release, failed, newerDev)
+		if not isCurrent() then return end
+		local lang = Language[settings.Language]
+		local text = lang.UPDATE_CHANNEL
+		if not release then
+			if not quiet then Notifications.push(failed and text.CheckFailed or text.NoRelease, 2500) end
+			return
+		end
+		latestTag = release.tag
+		local rollback = channel == "Stable" and installedDevTag ~= nil
+		local available = (channel == "Dev" and newerDev)
+			or (channel == "Stable" and (rollback and tonumber(release.tag) >= firstChannelVersion
+				or tonumber(release.tag) > settings.Version))
+		if not available then
+			if not quiet then Notifications.push(rollback and text.NoRelease or text.UpToDate, 2500) end
+			return
+		end
+		offeredRelease = release
+		offeredRelease.channel = channel
+		local title = (rollback and text.Rollback or text.Available) .. release.tag
+		local details = title .. "\n" .. lang.SETTINGS.CurrentVersionIs .. settings.installedBuild()
+		if release.notes then details = details .. "\n\n" .. release.notes end
+		Changes.load(details)
+	end)
+end
 local proxyHttpKey, proxyHttpsKey = {}, {}
 
 local function checkProxy()
@@ -606,25 +659,29 @@ end
 
 ---Starting update for NOBORU Application
 function settings.updateApp()
-	if Threads.netActionUnSafe(Network.isWifiEnabled) then
-		if lastVpkLink then
-			is_app_updating = true
-			Notifications.push(Language[settings.Language].SETTINGS.PleaseWait)
-			Threads.insertTask(
-				"DownloadAppUpdate",
-				{
-					Type = "FileDownload",
-					Link = "https://github.com" .. lastVpkLink,
-					Path = "NOBORU.vpk",
-					OnComplete = function()
-						UpdateApp()
-					end
-				}
-			)
-		end
-	else
+	if is_app_updating or not offeredRelease or offeredRelease.channel ~= settings.UpdateChannel then return false end
+	if not Threads.netActionUnSafe(Network.isWifiEnabled) then
 		Notifications.push(Language[settings.Language].SETTINGS.NoConnection)
+		return false
 	end
+	local function downloadFailed()
+		is_app_updating = false
+		Notifications.push(Language[settings.Language].SETTINGS.FailedToUpdate)
+	end
+	local filePath, release = "ux0:data/noboru/NOBORU.vpk", offeredRelease
+	is_app_updating = Threads.insertTask("DownloadAppUpdate", {
+		Type = "FileDownload", Link = release.url, Path = filePath, RequireContent = true,
+		OnError = downloadFailed,
+		OnComplete = function()
+			local fh = openFile(filePath, FREAD)
+			local valid = sizeFile(fh) == release.size and readFile(fh, 4) == "PK\3\4"
+			closeFile(fh)
+			if not valid then deleteFile(filePath); downloadFailed(); return end
+			UpdateApp()
+		end
+	})
+	if is_app_updating then Notifications.push(Language[settings.Language].SETTINGS.PleaseWait) end
+	return is_app_updating
 end
 
 ---Table with Option Names and their Functions
@@ -675,66 +732,16 @@ SettingsFunctions = {
 	ClearChapters = function()
 		ChapterSaver.clear()
 	end,
-	CheckUpdate = function()
-		if Threads.netActionUnSafe(Network.isWifiEnabled) then
-			local file = {}
-			Threads.insertTask(
-				"CheckLatestVersion",
-				{
-					Type = "StringRequest",
-					Link = "https://github.com/Golden-dreamer/NOBORU/releases/latest",
-					Table = file,
-					Index = "string",
-					OnComplete = function()
-						local content = file.string or ""
-						local tag = content:match("releases/tag/([0-9.]+)")
-
-						if tag == nil then
-							return
-						end
-
-						local latestVersion = tonumber(tag)
-						if latestVersion == nil then
-							return
-						end
-
-						local assetsFile = {}
-						Threads.insertTask(
-							"LoadAssetsData",
-							{
-								Type = "StringRequest",
-								Link = "https://github.com/Golden-dreamer/NOBORU/releases/expanded_assets/" .. tag,
-								Table = assetsFile,
-								Index = "string",
-								OnComplete = function ()
-									local assetsContent = assetsFile.string or ""
-									local link = assetsContent:match('href="([^"]-%.vpk)"') or ""
-									local late = link:match("/([^/]-)/[^/]-%.vpk")
-									if late then
-										lastVpkLink = link
-										lastVpkSize = assetsContent:match(">([0-9.]* MB)<") or "NaN"
-										settings.LateVersion = latestVersion or settings.LateVersion
-										local body = content:match('markdown%-body[^>]-">(.-)</div>') or ""
-										changesText = body:gsub("\n+%s-(%S)", "\n%1"):gsub("<li>", " * "):gsub("<[^>]->", ""):gsub("\n\n", "\n"):gsub("^\n", ""):gsub("%s+$", "") or ""				
-										if settings.LateVersion and settings.Version and tonumber(settings.LateVersion) > tonumber(settings.Version) then
-											Changes.load(Language[settings.Language].NOTIFICATIONS.NEW_UPDATE_AVAILABLE .. " : " .. settings.LateVersion .. "\n" .. Language[settings.Language].SETTINGS.CurrentVersionIs .. settings.Version .. "\n\n" .. changesText)
-											Notifications.push(Language[settings.Language].NOTIFICATIONS.NEW_UPDATE_AVAILABLE .. " " .. settings.LateVersion)
-										end
-									end
-								end
-							}
-						)
-					end
-				}
-			)
-		else
-			Notifications.push(Language[settings.Language].SETTINGS.NoConnection)
-		end
+	UpdateChannel = function()
+		if is_app_updating then return end
+		settings.UpdateChannel = settings.UpdateChannel == "Stable" and "Dev" or "Stable"
+		clearUpdateOffer()
 	end,
+	CheckUpdate = checkUpdate,
 	CheckDonators = function()
 	end,
 	GetLastVpkSize = function()
-		return lastVpkSize
+		return offeredRelease and BytesToStr(offeredRelease.size) or "?"
 	end,
 	ShowAuthor = function()
 		local original, fork = settings.developerCredits()
@@ -777,6 +784,8 @@ SettingsFunctions = {
 		SCE_RIGHT_STICK_SENSITIVITY = settings.RightStickSensitivity
 	end,
 	ResetAllSettings = function()
+		if is_app_updating then return end
+		clearUpdateOffer()
 		for k, v in pairs(settingsDefaults) do
 			if k ~= "FavouriteParsers" and k ~= "Language" and k ~= "Theme" then
 				settings[k] = v

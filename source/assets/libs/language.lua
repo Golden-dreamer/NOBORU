@@ -3584,8 +3584,25 @@ local proxyTestEnglish = {
 	Failed = "No response through the proxy.\nCheck the address, port and authentication."
 }
 
+local updateRussian = {
+	CheckFailed = "Не удалось проверить обновления",
+	NoRelease = "Для этого канала нет подходящей сборки",
+	UpToDate = "Новой сборки нет",
+	Rollback = "Вернуться на Stable: ",
+	Available = "Доступна сборка: "
+}
+local updateEnglish = {
+	CheckFailed = "Could not check for updates",
+	NoRelease = "No compatible build for this channel",
+	UpToDate = "No new build",
+	Rollback = "Return to Stable: ",
+	Available = "Build available: "
+}
+
 for name,lang in pairs(Language) do
 	local russian=name=="Russian" or lang==Language.Russian
+	lang.SETTINGS.UpdateChannel = russian and "Канал обновлений" or "Update channel"
+	lang.UPDATE_CHANNEL = russian and updateRussian or updateEnglish
 	lang.SETTINGS.CheckProxy = russian and "Проверка прокси" or "Check proxy"
 	lang.PROXY_TEST = russian and proxyTestRussian or proxyTestEnglish
 	lang.MODES.FilterSearch=russian and "Найти в списке" or "Find in list"

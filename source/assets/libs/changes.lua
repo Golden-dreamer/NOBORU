@@ -1,6 +1,7 @@
 local yOffset = 544
 local yFinal = 0
 local str
+local updateTitle
 Changes = {}
 
 local easingFunction = EaseInOutCubic
@@ -11,6 +12,7 @@ local is_app_updating = false
 
 function Changes.load(string)
 	str = string .. "\n\n" .. Language[Settings.Language].MESSAGE.PRESS_TO_UPDATE
+	updateTitle = string:match("^[^\n]+") or string
 	is_active = true
 	yFinal = (544 - (Font.getTextHeight(FONT20, str) + 20)) / 2
 	Timer.reset(animationTimer)
@@ -25,8 +27,7 @@ function Changes.close(pad)
 				return SCE_CTRL_REAL_CIRCLE
 			end
 		elseif Controls.check(pad, SCE_CTRL_REAL_CROSS) then
-			Settings.updateApp()
-			is_app_updating = true
+			is_app_updating = Settings.updateApp()
 		end
 	end
 end
@@ -50,7 +51,7 @@ function Changes.draw()
 		Graphics.fillRect(60, 900, yOffset, yOffset + Font.getTextHeight(FONT20, str) + 20, Color.new(0, 0, 0, 220))
 		local s = str
 		if is_app_updating then
-			s = (str:match("(.+)\n(.-)\n(.-)$") .. "\n" .. "(" .. BytesToStr(Network.getDownloadedBytes()) .. "/" .. SettingsFunctions.GetLastVpkSize() .. ") " .. Language[Settings.Language].SETTINGS.PleaseWait)
+			s = updateTitle .. "\n(" .. BytesToStr(Network.getDownloadedBytes()) .. "/" .. SettingsFunctions.GetLastVpkSize() .. ") " .. Language[Settings.Language].SETTINGS.PleaseWait
 		end
 		Font.print(FONT20, 80, yOffset + 10, s, COLOR_WHITE)
 	end
