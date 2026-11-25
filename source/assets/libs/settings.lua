@@ -1,7 +1,7 @@
 Settings = {
 	Language = "Default",
 	Theme = "Light",
-	Version = 0.925,
+	Version = 0.927,
 	NSFW = false,
 	Orientation = "Horizontal",
 	ZoomReader = "Smart",
@@ -43,6 +43,13 @@ DeadZoneValues = { 20, 30, 40, 50, 90 }
 SensitivityValues = { 0.25, 0.50, 0.75, 1, 1.25, 1.5, 1.75 }
 
 local settings = Settings
+
+function settings.developerCredits()
+	local labels = Language[settings.Language].SETTINGS
+	local fallback = Language.English.SETTINGS
+	return string.format(labels.OriginalAuthor or fallback.OriginalAuthor, "@Creckeryop"),
+		string.format(labels.ForkMaintainer or fallback.ForkMaintainer, "@barbaring0")
+end
 
 function settings.catalogLanguageSelected(code)
 	return settings.ParserLanguages[code] == true
@@ -232,7 +239,8 @@ local settingsListTree = {
 		"ProxyIP",
 		"ProxyPort",
 		"UseProxyAuth",
-		"ProxyAuth"
+		"ProxyAuth",
+		"CheckProxy"
 	},
 	Data = {
 		"SaveDataPath",
@@ -548,6 +556,53 @@ end
 local lastVpkLink
 local lastVpkSize = "NaN"
 local changesText
+local proxyHttpKey, proxyHttpsKey = {}, {}
+
+local function checkProxy()
+	local text = Language[settings.Language].PROXY_TEST
+	if not settings.UseProxy then
+		Notifications.push(text.Disabled, 3000)
+		return
+	end
+	local port = tostring(settings.ProxyPort)
+	if type(settings.ProxyIP) ~= "string" or not settings.ProxyIP:match("^[%w.-]+$")
+		or #settings.ProxyIP > 32 or not port:match("^%d%d?%d?%d?%d?$")
+		or tonumber(port) < 1 or tonumber(port) > 65535 then
+		Notifications.push(text.Invalid, 3000)
+		return
+	end
+	if Threads.check(proxyHttpKey) or Threads.check(proxyHttpsKey) then return end
+
+	local response = {}
+	local function isSuccess(body)
+		return body and body:match("^%s*success[%s%z]*$") ~= nil
+	end
+	local function finish()
+		local status
+		if isSuccess(response.https) then
+			status = "HTTPS"
+		elseif isSuccess(response.http) then
+			status = "HTTPOnly"
+		elseif (response.http or ""):find("[^%s%z]") or (response.https or ""):find("[^%s%z]") then
+			status = "Unexpected"
+		else
+			status = "Failed"
+		end
+		Notifications.push(text[status], 5500)
+	end
+	local endpoint = "://detectportal.firefox.com/success.txt"
+	Notifications.push(text.Checking, 1000)
+	Threads.addTask(proxyHttpKey, {
+		Type = "StringRequest", Link = "http" .. endpoint, Table = response, Index = "http"
+	})
+	Threads.addTask(proxyHttpsKey, {
+		Type = "StringRequest", Link = "https" .. endpoint, Table = response, Index = "https",
+		OnFinalComplete = function()
+			if response.https ~= nil then finish() end
+		end,
+		OnError = finish
+	})
+end
 
 ---Starting update for NOBORU Application
 function settings.updateApp()
@@ -682,7 +737,8 @@ SettingsFunctions = {
 		return lastVpkSize
 	end,
 	ShowAuthor = function()
-		Notifications.push("barbaring0\nBarbaring0@gmail.com")
+		local original, fork = settings.developerCredits()
+		Notifications.push(original .. "\n" .. fork)
 	end,
 	SwapXO = function()
 		settings.KeyType = table.next(settings.KeyType, { "JP", "EU" })
@@ -765,6 +821,7 @@ SettingsFunctions = {
 	UseProxyAuth = function()
 		settings.UseProxyAuth = not settings.UseProxyAuth
 	end,
+	CheckProxy = checkProxy,
 	ProxyAuth = function()
 		Keyboard.show(Language[Settings.Language].SETTINGS.ProxyAuth, settings.ProxyAuth, 128, TYPE_LATIN, MODE_TEXT, OPT_NO_AUTOCAP)
 		while Keyboard.getState() == RUNNING do

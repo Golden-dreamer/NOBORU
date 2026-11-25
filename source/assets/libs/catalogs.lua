@@ -356,6 +356,8 @@ local function selectSetting(index)
 					SettingsFunctions[item]()
 					sure_clear_cache = 0
 				end
+			elseif item == "CheckProxy" then
+				SettingsFunctions[item]()
 			else
 				SettingsFunctions[item]()
 				Settings.save()
@@ -1030,8 +1032,9 @@ function Catalogs.draw()
 						Font.print(FONT16, 225, y - 24, Language[Settings.Language].SETTINGS.PressAgainToAccept, COLOR_CRIMSON)
 					end
 				elseif task == "ShowAuthor" then
-					Font.print(FONT16, 225, y - 44, "@barbaring0", COLOR_SUBFONT)
-					Font.print(FONT16, 225, y - 24, "Email: Barbaring0@gmail.com", COLOR_ROYAL_BLUE)
+					local original, fork = Settings.developerCredits()
+					Font.print(FONT16, 225, y - 44, original, COLOR_SUBFONT)
+					Font.print(FONT16, 225, y - 24, fork, COLOR_SUBFONT)
 				elseif task == "SupportDev" then
 					Font.print(FONT16, 225, y - 44, "никто сюда не зайдёт всё равно", COLOR_SUBFONT)
 				elseif task == "ShowVersion" then
