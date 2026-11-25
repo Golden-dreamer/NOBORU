@@ -23,9 +23,11 @@ local function candidate(release, channel)
 		return
 	end
 	if type(release.assets) ~= "table" then return end
-	local name = "Noboru-" .. channel .. "-" .. tag .. ".vpk"
+	local name = "noboru-" .. channel:lower() .. ".vpk"
+	local legacyName = "Noboru-" .. channel .. "-" .. tag .. ".vpk"
 	for _, asset in ipairs(release.assets) do
-		if type(asset) == "table" and (asset.name == name or (channel == "Stable" and asset.name == "Noboru.vpk"))
+		if type(asset) == "table" and (asset.name == name or asset.name == legacyName
+			or (channel == "Stable" and asset.name == "Noboru.vpk"))
 			and asset.state == "uploaded" and asset.browser_download_url == downloads .. tag .. "/" .. asset.name
 			and type(asset.size) == "number" and asset.size >= 1000 then
 			local notes = type(release.body) == "string" and release.body:gsub("\r", "") or nil
