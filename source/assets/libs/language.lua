@@ -44,8 +44,7 @@ Language = {
 			DoubleTapReader = "Включить двойное нажатие для приближения",
 			SwapXO = "Сменить раскладку",
 			ShowAuthor = "Разработчики",
-			OriginalAuthor = "Автор оригинального приложения: %s",
-			ForkMaintainer = "Поддержка форка: %s",
+
 			ShowVersion = "Версия",
 			CheckUpdate = "Проверить на обновления",
 			LatestVersion = "Последняя версия : ",
@@ -279,8 +278,7 @@ Language = {
 			ZoomReader = "Reader scaling",
 			SwapXO = "Swap X and O",
 			ShowAuthor = "Developers",
-			OriginalAuthor = "Original app author: %s",
-			ForkMaintainer = "Fork maintainer: %s",
+
 			ShowVersion = "App version",
 			CheckUpdate = "Check for updates",
 			SkipFontLoading = "Skip font loading",
@@ -3565,24 +3563,6 @@ function GetLanguages()
 	return langs
 end
 
-local proxyTestRussian = {
-	Disabled = "Сначала включите прокси",
-	Invalid = "Проверьте адрес и порт прокси",
-	Checking = "Проверка прокси: HTTP и HTTPS…",
-	HTTPS = "Прокси работает: HTTPS доступен",
-	HTTPOnly = "Прокси доступен по HTTP,\nно проверка HTTPS не прошла",
-	Unexpected = "Неожиданный ответ через прокси.\nПроверьте авторизацию и правила доступа.",
-	Failed = "Нет ответа через прокси.\nПроверьте адрес, порт и авторизацию."
-}
-local proxyTestEnglish = {
-	Disabled = "Enable the proxy first",
-	Invalid = "Check the proxy address and port",
-	Checking = "Testing proxy: HTTP and HTTPS…",
-	HTTPS = "Proxy works: HTTPS is available",
-	HTTPOnly = "Proxy is reachable over HTTP,\nbut the HTTPS check failed",
-	Unexpected = "Unexpected response through the proxy.\nCheck authentication and access rules.",
-	Failed = "No response through the proxy.\nCheck the address, port and authentication."
-}
 
 local updateRussian = {
 	CheckFailed = "Не удалось проверить обновления",
@@ -3603,8 +3583,7 @@ for name,lang in pairs(Language) do
 	local russian=name=="Russian" or lang==Language.Russian
 	lang.SETTINGS.UpdateChannel = russian and "Канал обновлений" or "Update channel"
 	lang.UPDATE_CHANNEL = russian and updateRussian or updateEnglish
-	lang.SETTINGS.CheckProxy = russian and "Проверка прокси" or "Check proxy"
-	lang.PROXY_TEST = russian and proxyTestRussian or proxyTestEnglish
+
 	lang.MODES.FilterSearch=russian and "Найти в списке" or "Find in list"
 	lang.MODES.PrefixFilterSearch=russian and "Поиск по началу" or "Find by prefix"
 	lang.MODES.RefineFilterSearch=russian and "Уточни поиск (100+)" or "Refine search (100+)"

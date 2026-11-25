@@ -49,10 +49,7 @@ SensitivityValues = { 0.25, 0.50, 0.75, 1, 1.25, 1.5, 1.75 }
 local settings = Settings
 
 function settings.developerCredits()
-	local labels = Language[settings.Language].SETTINGS
-	local fallback = Language.English.SETTINGS
-	return string.format(labels.OriginalAuthor or fallback.OriginalAuthor, "@Creckeryop"),
-		string.format(labels.ForkMaintainer or fallback.ForkMaintainer, "@barbaring0")
+	return I18n.text("credits.original", "@Creckeryop"), I18n.text("credits.fork", "@barbaring0")
 end
 
 function settings.catalogLanguageSelected(code)
@@ -611,20 +608,23 @@ local function checkUpdate(quiet)
 end
 local proxyHttpKey, proxyHttpsKey = {}, {}
 
+function settings.isCheckingProxy()
+	return Threads.check(proxyHttpKey) or Threads.check(proxyHttpsKey)
+end
+
 local function checkProxy()
-	local text = Language[settings.Language].PROXY_TEST
 	if not settings.UseProxy then
-		Notifications.push(text.Disabled, 3000)
+		Notifications.push(I18n.text("proxy.Disabled"), 3000)
 		return
 	end
 	local port = tostring(settings.ProxyPort)
 	if type(settings.ProxyIP) ~= "string" or not settings.ProxyIP:match("^[%w.-]+$")
 		or #settings.ProxyIP > 32 or not port:match("^%d%d?%d?%d?%d?$")
 		or tonumber(port) < 1 or tonumber(port) > 65535 then
-		Notifications.push(text.Invalid, 3000)
+		Notifications.push(I18n.text("proxy.Invalid"), 3000)
 		return
 	end
-	if Threads.check(proxyHttpKey) or Threads.check(proxyHttpsKey) then return end
+	if settings.isCheckingProxy() then return end
 
 	local response = {}
 	local function isSuccess(body)
@@ -641,10 +641,10 @@ local function checkProxy()
 		else
 			status = "Failed"
 		end
-		Notifications.push(text[status], 5500)
+		Notifications.push(I18n.text("proxy." .. status), 5500)
 	end
 	local endpoint = "://detectportal.firefox.com/success.txt"
-	Notifications.push(text.Checking, 1000)
+	Notifications.push(I18n.text("proxy.Checking"), 2000)
 	Threads.addTask(proxyHttpKey, {
 		Type = "StringRequest", Link = "http" .. endpoint, Table = response, Index = "http"
 	})
@@ -736,6 +736,9 @@ SettingsFunctions = {
 		if is_app_updating then return end
 		settings.UpdateChannel = settings.UpdateChannel == "Stable" and "Dev" or "Stable"
 		clearUpdateOffer()
+		if settings.UpdateChannel == "Dev" then
+			Notifications.push(I18n.text("updates.devWarning"), 6500)
+		end
 	end,
 	CheckUpdate = checkUpdate,
 	CheckDonators = function()

@@ -893,7 +893,8 @@ function Catalogs.draw()
 						Font.print(FONT16, 225, y - 44, Language[Settings.Language].SETTINGS_DESCRIPTION[task], COLOR_ROYAL_BLUE)
 					end
 				else
-					Font.print(FONT20, 225, y - 70, Language[Settings.Language].SETTINGS[task] or task, COLOR_FONT)
+					local title = task == "CheckProxy" and I18n.text("proxy.title") or Language[Settings.Language].SETTINGS[task] or task
+					Font.print(FONT20, 225, y - 70, title, COLOR_FONT)
 					if Language[Settings.Language].SETTINGS_DESCRIPTION[task] then
 						Font.print(FONT16, 225, y - 44, Language[Settings.Language].SETTINGS_DESCRIPTION[task], COLOR_SUBFONT)
 					end
@@ -948,6 +949,8 @@ function Catalogs.draw()
 					Font.print(FONT16, 225, y - 44, Settings.ChapterSorting, COLOR_SUBFONT)
 				elseif task == "ConnectionTime" then
 					Font.print(FONT16, 225, y - 44, Settings.ConnectionTime, COLOR_ROYAL_BLUE)
+				elseif task == "CheckProxy" and Settings.isCheckingProxy() then
+					Font.print(FONT16, 225, y - 44, I18n.text("proxy.Checking"), COLOR_SUBFONT)
 				elseif task == "UseProxy" then
 					Font.print(FONT16, 225, y - 44, Language[Settings.Language].YORN[Settings.UseProxy], COLOR_ROYAL_BLUE)
 				elseif task == "ProxyIP" then
